@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 #define BUFF_SIZE 1024
-#define MAXIPLEN 16
+#define MAX_IP_LEN 16
 
 using namespace std;
 
@@ -20,8 +20,9 @@ void getIPPort(int argc, char** argv, int *port, char *IP)
         exit(1);
     }
     sscanf(argv[1], "%[^:]:%d", IP, port);
+#ifdef DEBUG
     fprintf(stderr, "IP: %s    port: %d\n", IP, *port);
-
+#endif
     return;
 }
 
@@ -29,10 +30,11 @@ int main(int argc , char *argv[])
 {
 
     int port;
-    char IP[MAXIPLEN];
+    char IP[MAX_IP_LEN];
     getIPPort(argc, argv, &port, IP);
 
-    int localSocket, recved;
+    int localSocket;
+    int sent, recved;
     localSocket = socket(AF_INET, SOCK_STREAM, 0);
 
     if (localSocket == -1){
@@ -54,23 +56,30 @@ int main(int argc , char *argv[])
         return 0;
     }
 
+    char Message[BUFF_SIZE] = {};
     char receiveMessage[BUFF_SIZE] = {};
 
     while(1){
+
+        bzero(Message, sizeof(char) * BUFF_SIZE);
+        //scanf("%[^\n]", Message);
+        cin.getline(Message, BUFF_SIZE);
+        sent = send(localSocket, Message, BUFF_SIZE, 0);
+
         bzero(receiveMessage, sizeof(char)*BUFF_SIZE);
         if ((recved = recv(localSocket, receiveMessage, sizeof(char)*BUFF_SIZE, 0)) < 0){
             cout << "recv failed, with received bytes = " << recved << endl;
             break;
         }
         else if (recved == 0){
-            cout << "<end>\n";
+            //cout << "<end>";
             break;
         }
-        printf("%d:%s\n", recved, receiveMessage);
-
+        printf("%s", receiveMessage);
     }
+#ifdef DEBUG
     printf("close Socket\n");
+#endif
     close(localSocket);
     return 0;
 }
-

@@ -14,6 +14,11 @@ server: $(SERVER)
 client: $(CLIENT)
 	$(CC) $(CLIENT) -o $(CLI)  $(OPENCV) $(PTHREAD)
 
+serverDEBUG: $(SERVER)
+	$(CC) $(SERVER) -DDEBUG -o $(SER)  $(OPENCV) $(PTHREAD) 
+clientDEBUG: $(CLIENT)
+	$(CC) $(CLIENT) -DDEBUG -o $(CLI)  $(OPENCV) $(PTHREAD)
+
 .PHONY: clean
 
 clean:
