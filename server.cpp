@@ -11,15 +11,25 @@
 #define BUFF_SIZE 1024
 
 using namespace std;
-int main(int argc, char** argv){
 
-    int localSocket, remoteSocket, port = 4097;                               
+int getPort(int argc, char** argv)
+{
+    if (argc != 2) {
+        fprintf(stderr, "Usage: ./server [port]\n");
+        exit(1);
+    }
 
+    return atoi(argv[1]);
+}
+
+int main(int argc, char** argv)
+{
+    
+    int localSocket, remoteSocket, port = getPort(argc, argv);
     struct  sockaddr_in localAddr,remoteAddr;
-          
     int addrLen = sizeof(struct sockaddr_in);  
 
-    localSocket = socket(AF_INET , SOCK_STREAM , 0);
+    localSocket = socket(AF_INET, SOCK_STREAM, 0);
     
     if (localSocket == -1){
         printf("socket() call failed!!");
@@ -31,17 +41,15 @@ int main(int argc, char** argv){
     localAddr.sin_port = htons(port);
 
     char Message[BUFF_SIZE] = {};
-
-
         
-        if( bind(localSocket,(struct sockaddr *)&localAddr , sizeof(localAddr)) < 0) {
-            printf("Can't bind() socket");
-            return 0;
-        }
+    if( bind(localSocket, (struct sockaddr *)&localAddr , sizeof(localAddr)) < 0) {
+        printf("Can't bind() socket");
+        return 0;
+    }
         
-        listen(localSocket , 3);
+    listen(localSocket , 3);
 
-    while(1){    
+    while(1){
         std::cout <<  "Waiting for connections...\n"
                 <<  "Server Port:" << port << std::endl;
 
@@ -55,10 +63,10 @@ int main(int argc, char** argv){
         std::cout << "Connection accepted" << std::endl;
 
         int sent;
-        strcpy(Message,"Hello World!!\n");
-        sent = send(remoteSocket,Message,strlen(Message),0);
-        strcpy(Message,"Computer Networking is interesting!!\n");
-        sent = send(remoteSocket,Message,strlen(Message),0);
+        strcpy(Message, "Hello World!!\n");
+        sent = send(remoteSocket, Message,strlen(Message), 0);
+        strcpy(Message, "Computer Networking is interesting!!\n");
+        sent = send(remoteSocket, Message,strlen(Message), 0);
 
         close(remoteSocket);
     }
