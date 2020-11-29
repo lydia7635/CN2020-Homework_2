@@ -33,6 +33,13 @@ typedef struct {
 
 using namespace std;
 
+void initClients(Clients *clients)
+{
+    clients->cmd = CMD_NONE;
+    bzero(clients->targetFile, sizeof(char) * MAX_FILENAME_SIZE);
+    return;
+}
+
 void getIPPort(int argc, char** argv, int *port, char *IP)
 {
     if (argc != 2) {
@@ -50,6 +57,7 @@ void parseCmd(char *string, Clients *clients)
 {
     char bufCMD[BUFF_SIZE], bufFILE[MAX_FILENAME_SIZE], bufOTHER[BUFF_SIZE];
     bzero(bufCMD, sizeof(char) * BUFF_SIZE);
+    bzero(bufFILE, sizeof(char) * MAX_FILENAME_SIZE);
     
     int argcnt = sscanf(string, "%s%s%s", bufCMD, bufFILE, bufOTHER);
     if( strncmp(bufCMD, "ls\0", BUFF_SIZE) == 0 ) {
@@ -109,12 +117,44 @@ void cmd_list(int localSocket, char Message[BUFF_SIZE])
     return;
 }
 
+void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
+{
+    strncpy(&Message[1], targetFile, strlen(targetFile));
+
+    FILE *fp = fopen(targetFile, "r");
+    
+    if(fp == NULL) {
+        fprintf(stderr, "The '%s' doesn't exist\n", targetFile);
+        return;
+    }
+
+    int sent = send(localSocket, Message, BUFF_SIZE, 0);
+#ifdef DEBUG
+    fprintf(stderr, "sent message!\n");
+#endif
+    bzero(Message, sizeof(char) * BUFF_SIZE);
+    int fileLen = 0, fileRemain = 0;
+    while( (fileLen = fread(Message, sizeof(char), BUFF_SIZE, fp)) > 0 ) {
+        sent = send(localSocket, Message, BUFF_SIZE, 0);
+        bzero(Message, sizeof(char) * BUFF_SIZE);
+#ifdef DEBUG
+        if(fileLen != BUFF_SIZE) fprintf(stderr, "fileLen = %d\n", fileLen);
+#endif
+        fileRemain = fileLen;
+    }
+    fclose(fp);
+    sprintf(Message, "<end>%04d\n", BUFF_SIZE - fileRemain);
+    send(localSocket, Message, BUFF_SIZE, 0);
+
+    return;
+}
+
 void cmd_close(int localSocket, char Message[BUFF_SIZE])
 {
     int sent = send(localSocket, Message, BUFF_SIZE, 0);
     close(localSocket);
 #ifdef DEBUG
-    printf("close Socket\n");
+    printf("close socket\n");
 #endif
     exit(0);
 }
@@ -124,6 +164,7 @@ int main(int argc , char *argv[])
     int port;
     char IP[MAX_IP_LEN];
     Clients *clients = (Clients *)malloc(sizeof(Clients));
+    initClients(clients);
     getIPPort(argc, argv, &port, IP);
 
     int localSocket;
@@ -154,7 +195,7 @@ int main(int argc , char *argv[])
     while(1){
 
         bzero(inputStr, sizeof(char) * BUFF_SIZE);
-        cin.getline(inputStr, BUFF_SIZE);
+        cin.getline(inputStr, BUFF_SIZE, '\n');
         //sent = send(localSocket, Message, BUFF_SIZE, 0);
         parseCmd(inputStr, clients);
 
@@ -167,6 +208,7 @@ int main(int argc , char *argv[])
                 break;
 
             case CMD_PUT:
+                cmd_put(localSocket, Message, clients->targetFile);
                 //sprintf(Message, "put [%s]\n", clients[remoteSocket].targetFile);
                 //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
@@ -197,6 +239,7 @@ int main(int argc , char *argv[])
                 fprintf(stderr, "other CMD?\n");
                 break;
         }
+        initClients(clients);
     }
     return 0;
 }
