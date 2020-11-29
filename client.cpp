@@ -10,6 +10,26 @@
 
 #define BUFF_SIZE 1024
 #define MAX_IP_LEN 16
+#define MAX_FILENAME_SIZE 512
+
+typedef enum Cmd
+{
+    CMD_NONE,
+    CMD_LS,
+    CMD_PUT,
+    CMD_GET,
+    CMD_PLAY,
+    CMD_CLOSE,
+    CMD_NOTFOUND,
+    CMD_FORMATERR,
+    CMD_FILENOTEXIST,
+    CMD_NOTMPG
+} CMD;
+
+typedef struct {
+    CMD cmd;    // command
+    char targetFile[MAX_FILENAME_SIZE];
+} Clients;
 
 using namespace std;
 
@@ -26,11 +46,84 @@ void getIPPort(int argc, char** argv, int *port, char *IP)
     return;
 }
 
+void parseCmd(char *string, Clients *clients)
+{
+    char bufCMD[BUFF_SIZE], bufFILE[MAX_FILENAME_SIZE], bufOTHER[BUFF_SIZE];
+    bzero(bufCMD, sizeof(char) * BUFF_SIZE);
+    
+    int argcnt = sscanf(string, "%s%s%s", bufCMD, bufFILE, bufOTHER);
+    if( strncmp(bufCMD, "ls\0", BUFF_SIZE) == 0 ) {
+        if(argcnt != 1) clients->cmd = CMD_FORMATERR;
+        else clients->cmd = CMD_LS;
+    }
+    else if( strncmp(bufCMD, "put\0", BUFF_SIZE) == 0 ) {
+        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
+        else {
+            clients->cmd = CMD_PUT;
+            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
+        }
+    }
+    else if( strncmp(bufCMD, "get\0", BUFF_SIZE) == 0 ) {
+        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
+        else {
+            clients->cmd = CMD_GET;
+            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
+        }
+    }
+    else if( strncmp(bufCMD, "play\0", BUFF_SIZE) == 0 ) {
+        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
+        else {
+            clients->cmd = CMD_PLAY;
+            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
+        }
+    }
+    else if( strncmp(bufCMD, "exit\0", BUFF_SIZE) == 0 ) {
+        if(argcnt != 1) clients->cmd = CMD_FORMATERR;
+        else clients->cmd = CMD_CLOSE;
+    }
+    else clients->cmd = CMD_NOTFOUND;
+    return;
+}
+
+void cmd_list(int localSocket, char Message[BUFF_SIZE])
+{
+    int sent = send(localSocket, Message, BUFF_SIZE, 0);
+    int recved;
+    char receiveMessage[BUFF_SIZE] = {};
+    int end = 0;
+    while (!end) {
+        bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+        if ((recved = recv(localSocket, receiveMessage, sizeof(char) * BUFF_SIZE, 0)) < 0){
+            cout << "recv failed, with received bytes = " << recved << endl;
+            return;
+        }
+        else if (recved == 0){
+            //cout << "<end>";
+            return;;
+        };
+        if( strncmp(receiveMessage, "<end>\n", BUFF_SIZE) != 0 )
+            printf("%s", receiveMessage);
+        else
+            end = 1;
+    }
+    return;
+}
+
+void cmd_close(int localSocket, char Message[BUFF_SIZE])
+{
+    int sent = send(localSocket, Message, BUFF_SIZE, 0);
+    close(localSocket);
+#ifdef DEBUG
+    printf("close Socket\n");
+#endif
+    exit(0);
+}
+
 int main(int argc , char *argv[])
 {
-
     int port;
     char IP[MAX_IP_LEN];
+    Clients *clients = (Clients *)malloc(sizeof(Clients));
     getIPPort(argc, argv, &port, IP);
 
     int localSocket;
@@ -49,37 +142,61 @@ int main(int argc , char *argv[])
     info.sin_addr.s_addr = inet_addr(IP);
     info.sin_port = htons(port);
 
-
     int err = connect(localSocket, (struct sockaddr *)&info, sizeof(info));
     if(err == -1){
         printf("Connection error\n");
         return 0;
     }
 
+    char inputStr[BUFF_SIZE] = {};
     char Message[BUFF_SIZE] = {};
-    char receiveMessage[BUFF_SIZE] = {};
 
     while(1){
 
-        bzero(Message, sizeof(char) * BUFF_SIZE);
-        //scanf("%[^\n]", Message);
-        cin.getline(Message, BUFF_SIZE);
-        sent = send(localSocket, Message, BUFF_SIZE, 0);
+        bzero(inputStr, sizeof(char) * BUFF_SIZE);
+        cin.getline(inputStr, BUFF_SIZE);
+        //sent = send(localSocket, Message, BUFF_SIZE, 0);
+        parseCmd(inputStr, clients);
 
-        bzero(receiveMessage, sizeof(char)*BUFF_SIZE);
-        if ((recved = recv(localSocket, receiveMessage, sizeof(char)*BUFF_SIZE, 0)) < 0){
-            cout << "recv failed, with received bytes = " << recved << endl;
-            break;
+        bzero(Message, sizeof(char) * BUFF_SIZE);
+        Message[0] = clients->cmd;
+
+        switch(clients->cmd) {
+            case CMD_LS:
+                cmd_list(localSocket, Message);
+                break;
+
+            case CMD_PUT:
+                //sprintf(Message, "put [%s]\n", clients[remoteSocket].targetFile);
+                //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+                break;
+
+            case CMD_GET:
+                //sprintf(Message, "get [%s]\n", clients[remoteSocket].targetFile);
+                //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+                break;
+
+            case CMD_PLAY:
+                //sprintf(Message, "play [%s]\n", clients[remoteSocket].targetFile);
+                //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+                break;
+
+            case CMD_CLOSE:
+                cmd_close(localSocket, Message);
+                break;
+
+            case CMD_NOTFOUND:
+                fprintf(stderr, "Command not found.\n");
+                break;
+
+            case CMD_FORMATERR:
+                fprintf(stderr, "Command format error.\n");
+                break;
+
+            default:
+                fprintf(stderr, "other CMD?\n");
+                break;
         }
-        else if (recved == 0){
-            //cout << "<end>";
-            break;
-        }
-        printf("%s", receiveMessage);
     }
-#ifdef DEBUG
-    printf("close Socket\n");
-#endif
-    close(localSocket);
     return 0;
 }

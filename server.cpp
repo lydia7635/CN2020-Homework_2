@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/types.h>
+#include <dirent.h>
 
 #define BUFF_SIZE 1024
 #define MAX_FD 10   // Or use getdtablesize(). We can use 4, 5, ..., 9
@@ -23,7 +25,9 @@ typedef enum Cmd
     CMD_PLAY,
     CMD_CLOSE,
     CMD_NOTFOUND,
-    CMD_FORMATERR
+    CMD_FORMATERR,
+    CMD_FILENOTEXIST,
+    CMD_NOTMPG
 } CMD;
 
 typedef struct {
@@ -85,38 +89,74 @@ void initClients(Clients *clients)
 
 void parseCmd(char *string, Clients *clients)
 {
-    char bufCMD[BUFF_SIZE], bufFILE[MAX_FILENAME_SIZE], bufOTHER[BUFF_SIZE];
-    int argcnt = sscanf(string, "%s%s%s", bufCMD, bufFILE, bufOTHER);
-    if( strncmp(bufCMD, "ls", strlen(bufCMD)) == 0 ) {
-        if(argcnt != 1) clients->cmd = CMD_FORMATERR;
-        else clients->cmd = CMD_LS;
+    clients->cmd = (CMD)string[0];
+    switch(clients->cmd){
+        case CMD_LS: case CMD_PUT: case CMD_CLOSE:
+            return;
+        /*case CMD_GET:
+            strncpy(clients->targetFile, &string[1], strlen(bufFILE - 1));
+            if(no file) {
+                clients->cmd = CMD_FILENOTEXIST;
+                // send...
+            }
+            else {
+                // send ACK ...
+            }
+            return;
+        case CMD_PLAY:
+            strncpy(clients->targetFile, &string[1], strlen(bufFILE - 1));
+            if(no file) {
+                clients->cmd = CMD_FILENOTEXIST;
+                // send error ...
+            }
+            else if(not mpg) {
+                clients->cmd = CMD_NOTMPG;
+                // send error...
+            }
+            else {
+                // send ACK ...
+            }
+            return;*/
+        default:
+            // send error ...(not mpg)
+            return;
     }
-    else if( strncmp(bufCMD, "put", strlen(bufCMD)) == 0 ) {
-        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
-        else {
-            clients->cmd = CMD_PUT;
-            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
-        }
+}
+
+void cmd_list(int remoteSocket)
+{
+    char Message[BUFF_SIZE] = {};
+    struct dirent **entry_list;
+    struct dirent *file;
+    int fileNum = scandir(".", &entry_list, 0, alphasort);
+
+    for(int i = 0; i < fileNum; ++i) {
+        file = entry_list[i];
+        bzero(Message, sizeof(char) * BUFF_SIZE);
+        // print on client
+        sprintf(Message, "%s\n", file->d_name);
+        send(remoteSocket, Message, BUFF_SIZE, 0);
+#ifdef DEBUG
+        // print on server
+        fprintf(stderr, ">> %s\n", file->d_name);
+#endif
+        free(file);
     }
-    else if( strncmp(bufCMD, "get", strlen(bufCMD)) == 0 ) {
-        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
-        else {
-            clients->cmd = CMD_GET;
-            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
-        }
-    }
-    else if( strncmp(bufCMD, "play", strlen(bufCMD)) == 0 ) {
-        if(argcnt != 2) clients->cmd = CMD_FORMATERR;
-        else {
-            clients->cmd = CMD_PLAY;
-            strncpy(clients->targetFile, bufFILE, strlen(bufFILE));
-        }
-    }
-    else if( strncmp(bufCMD, "exit", strlen(bufCMD)) == 0 ) {
-        if(argcnt != 1) clients->cmd = CMD_FORMATERR;
-        else clients->cmd = CMD_CLOSE;
-    }
-    else clients->cmd = CMD_NOTFOUND;
+
+    bzero(Message, sizeof(char) * BUFF_SIZE);
+    sprintf(Message, "<end>\n");
+    send(remoteSocket, Message, BUFF_SIZE, 0);
+    return;
+}
+
+void cmd_close(int remoteSocket, Clients *clients, fd_set *originalSet)
+{
+#ifdef DEBUG
+    fprintf(stderr, "Close client socket [%d].\n", remoteSocket);
+#endif
+    close(remoteSocket);
+    initOneClient(clients);
+    FD_CLR(remoteSocket, originalSet);
     return;
 }
 
@@ -196,22 +236,18 @@ int main(int argc, char** argv)
             break;
         }
         else if (recved == 0){
-            fprintf(stderr, "Close client socket [%d].\n", remoteSocket);
-            close(remoteSocket);
-            initOneClient(&clients[remoteSocket]);
-            FD_CLR(remoteSocket, &originalSet);
+            cmd_close(remoteSocket, &clients[remoteSocket], &originalSet);
             continue;
         }
 #ifdef DEBUG
-        printf("recvData: %s\n", receiveMessage);
+        printf("recvData: [%d]\n", receiveMessage[0]);
 #endif
         parseCmd(receiveMessage, &clients[remoteSocket]);
 
         bzero(Message, sizeof(char) * BUFF_SIZE);
         switch(clients[remoteSocket].cmd) {
             case CMD_LS:
-                sprintf(Message, "List some data...\n");
-                sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+                cmd_list(remoteSocket);
                 break;
 
             case CMD_PUT:
@@ -230,10 +266,7 @@ int main(int argc, char** argv)
                 break;
 
             case CMD_CLOSE:
-                fprintf(stderr, "Close client socket [%d].\n", remoteSocket);
-                close(remoteSocket);
-                initOneClient(&clients[remoteSocket]);
-                FD_CLR(remoteSocket, &originalSet);
+                cmd_close(remoteSocket, &clients[remoteSocket], &originalSet);
                 break;
 
             case CMD_NOTFOUND:
