@@ -21,7 +21,7 @@ typedef enum Cmd
     CMD_GET,
     CMD_PLAY,
     CMD_CLOSE,
-    CMD_NOTFOUND,
+    CMD_CMDNOTFOUND,
     CMD_FORMATERR,
     CMD_FILENOTEXIST,
     CMD_NOTMPG
@@ -53,6 +53,7 @@ void getIPPort(int argc, char** argv, int *port, char *IP)
 #endif
     return;
 }
+
 void setBlocking(int localSocket)
 {
     int flags = fcntl(localSocket, F_GETFL, 0);
@@ -102,7 +103,7 @@ void parseCmd(char *string, Clients *clients)
         if(argcnt != 1) clients->cmd = CMD_FORMATERR;
         else clients->cmd = CMD_CLOSE;
     }
-    else clients->cmd = CMD_NOTFOUND;
+    else clients->cmd = CMD_CMDNOTFOUND;
     return;
 }
 
@@ -145,7 +146,7 @@ void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
     FILE *fp = fopen(targetFile, "r");
     
     if(fp == NULL) {
-        fprintf(stderr, "The '%s' doesn't exist\n", targetFile);
+        fprintf(stderr, "The '%s' doesn't exist.\n", targetFile);
         return;
     }
 
@@ -171,7 +172,89 @@ void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
     return;
 }
 
+void cmd_get(int localSocket, char Message[BUFF_SIZE], char *targetFile)
+{
+    int sent, recved, recvedTotal;
+    int end = 0;
+    char receiveMessage[BUFF_SIZE] = {};
 
+    // send msg
+    strncpy(&Message[1], targetFile, strlen(targetFile));
+    sent = send(localSocket, Message, BUFF_SIZE, 0);
+
+    // recv ack/error
+    bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+
+    if ((recved = recv(localSocket, receiveMessage, sizeof(char) * BUFF_SIZE, 0)) < 0){
+        cout << "recv failed, with received bytes = " << recved << endl;
+        return;
+    }
+    else if (recved == 0){
+        fprintf(stderr, "ERROR: \"get\" received nothing.\n");
+        return;
+    }
+
+    if(receiveMessage[0] == CMD_FILENOTEXIST) {
+        fprintf(stderr, "The '%s' doesn't exist.\n", targetFile);
+        return;
+    }
+
+    // receive data
+#ifdef DEBUG
+    fprintf(stderr, "We'll receive file '%s'\n", targetFile);
+#endif
+
+    FILE *fp = fopen(targetFile, "w");
+
+    while(!end) {
+        recvedTotal = 0;
+        bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+
+        while(recvedTotal < BUFF_SIZE) {
+            if ((recved = recv(localSocket, &receiveMessage[recvedTotal],
+                sizeof(char) * (BUFF_SIZE - recvedTotal), 0)) < 0){
+                cout << "recv failed, with received bytes = " << recved << endl;
+                fclose(fp);
+                return;
+            }
+            else if (recved == 0){
+                fprintf(stderr, "ERROR: \"get\" received nothing.\n");
+                fclose(fp);
+                return;
+            }
+            recvedTotal += recved;
+
+#ifdef DEBUG
+        //fprintf(stderr, ".");
+        /*if(recved < BUFF_SIZE) {
+            fprintf(stderr, "recved = %d [%c]\n", recved, receiveMessage[0]);
+        }*/
+#endif
+        }
+
+        if( strncmp(receiveMessage, "<end>", 5) != 0 )
+            fwrite(receiveMessage, sizeof(char), BUFF_SIZE, fp);
+        else
+            end = 1;
+    }
+
+    int fileSpace;
+    sscanf(receiveMessage, "<end>%d", &fileSpace);
+#ifdef DEBUG
+    fprintf(stderr, "\"get\" finished! space = %d\n", fileSpace);
+#endif
+    fseek(fp, 0L, SEEK_END);
+    long int fileSize = ftell(fp);
+#ifdef DEBUG
+    fprintf(stderr, "fileSize = %ld\n", fileSize);
+#endif
+    int fd = fileno(fp);
+    ftruncate(fd, fileSize - fileSpace);
+
+    close(fd);
+    fclose(fp);
+    return;
+}
 
 void cmd_close(int localSocket, char Message[BUFF_SIZE])
 {
@@ -220,7 +303,6 @@ int main(int argc , char *argv[])
 
         bzero(inputStr, sizeof(char) * BUFF_SIZE);
         cin.getline(inputStr, BUFF_SIZE, '\n');
-        //sent = send(localSocket, Message, BUFF_SIZE, 0);
         parseCmd(inputStr, clients);
 
         bzero(Message, sizeof(char) * BUFF_SIZE);
@@ -235,12 +317,10 @@ int main(int argc , char *argv[])
             case CMD_PUT:
                 setBlocking(localSocket);
                 cmd_put(localSocket, Message, clients->targetFile);
-                //sprintf(Message, "put [%s]\n", clients[remoteSocket].targetFile);
-                //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
 
             case CMD_GET:
-                //cmd_get(localSocket, Message, clients->targetFile);
+                cmd_get(localSocket, Message, clients->targetFile);
                 //sprintf(Message, "get [%s]\n", clients[remoteSocket].targetFile);
                 //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
@@ -255,7 +335,7 @@ int main(int argc , char *argv[])
                 cmd_close(localSocket, Message);
                 break;
 
-            case CMD_NOTFOUND:
+            case CMD_CMDNOTFOUND:
                 fprintf(stderr, "Command not found.\n");
                 break;
 

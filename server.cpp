@@ -14,7 +14,7 @@
 
 #define BUFF_SIZE 1024
 #define MAX_FD 20   // Or use getdtablesize(). We can use 4, 5, ..., 19
-#define MAX_FILENAME_SIZE 512
+#define MAX_FILENAME_SIZE 1024
 
 typedef enum Cmd
 {
@@ -24,7 +24,7 @@ typedef enum Cmd
     CMD_GET,
     CMD_PLAY,
     CMD_CLOSE,
-    CMD_NOTFOUND,
+    CMD_CMDNOTFOUND,
     CMD_FORMATERR,
     CMD_FILENOTEXIST,
     CMD_NOTMPG
@@ -34,6 +34,7 @@ typedef struct {
     CMD cmd;    // command
     char targetFile[MAX_FILENAME_SIZE];
     FILE *fp;
+    int fileRemain;
 } Clients;
 
 using namespace std;
@@ -103,22 +104,6 @@ void initClients(Clients *clients)
     return;
 }
 
-void parseCmd(char *string, Clients *clients)
-{
-    clients->cmd = (CMD)string[0];
-    switch(clients->cmd){
-        case CMD_LS: case CMD_CLOSE:
-            return;
-        case CMD_PUT:
-            strncpy(clients->targetFile, &string[1], MAX_FILENAME_SIZE - 1);
-            return;
-
-        default:
-            // send error ...(not mpg)
-            return;
-    }
-}
-
 void cmd_list(int remoteSocket, Clients *clients)
 {
     char Message[BUFF_SIZE] = {};
@@ -159,6 +144,35 @@ void cmd_put(int remoteSocket, Clients *clients)
     return;
 }
 
+void cmd_get(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
+{
+    char Message[BUFF_SIZE] = {};
+
+    bzero(Message, sizeof(char) * BUFF_SIZE);
+
+    clients->fp = fopen(clients->targetFile, "r");
+    if(clients->fp == NULL) {
+        Message[0] = CMD_FILENOTEXIST;
+        send(remoteSocket, Message, BUFF_SIZE, 0);
+#ifdef DEBUG
+        fprintf(stderr, "No file '%s' on server.\n", clients->targetFile);
+#endif
+        initOneClient(clients);
+        return;
+    }
+    Message[0] = CMD_GET;
+    send(remoteSocket, Message, BUFF_SIZE, 0);
+
+    clients->cmd = CMD_GET;
+    clients->fileRemain = 0;
+    FD_SET(remoteSocket, writeOriginalSet);
+ 
+#ifdef DEBUG
+    fprintf(stderr, "We'll send file '%s'\n", clients->targetFile);
+#endif
+    return;
+}
+
 void cmd_close(int remoteSocket, Clients *clients, fd_set *readOriginalSet)
 {
 #ifdef DEBUG
@@ -174,7 +188,6 @@ void recvCMD(int remoteSocket, Clients *clients, fd_set *readOriginalSet, fd_set
 {
     int recved, sent;
     char receiveMessage[BUFF_SIZE] = {};
-    char Message[BUFF_SIZE] = {};
     bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
 
     if ((recved = recv(remoteSocket, receiveMessage, sizeof(char) * BUFF_SIZE, 0)) < 0){
@@ -189,8 +202,10 @@ void recvCMD(int remoteSocket, Clients *clients, fd_set *readOriginalSet, fd_set
 #ifdef DEBUG
     printf("recvData: [%d]\n", receiveMessage[0]);
 #endif
-    parseCmd(receiveMessage, clients);
+    clients->cmd = (CMD)receiveMessage[0];
+    strncpy(clients->targetFile, &receiveMessage[1], MAX_FILENAME_SIZE - 1);
 
+    char Message[BUFF_SIZE] = {};
     bzero(Message, sizeof(char) * BUFF_SIZE);
     switch(clients->cmd) {
         case CMD_LS:
@@ -202,6 +217,17 @@ void recvCMD(int remoteSocket, Clients *clients, fd_set *readOriginalSet, fd_set
             setBlocking(remoteSocket);
             cmd_put(remoteSocket, clients);
             break;
+
+        case CMD_GET:
+            cmd_get(remoteSocket, clients, writeOriginalSet);
+            //sprintf(Message, "get [%s]\n", clients[remoteSocket].targetFile);
+            //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+            break;
+
+        /*case CMD_PLAY:
+            sprintf(Message, "play [%s]\n", clients[remoteSocket].targetFile);
+            sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+            break;*/
 
         case CMD_CLOSE:
             cmd_close(remoteSocket, clients, readOriginalSet);
@@ -264,6 +290,33 @@ void cmd_put_write(int remoteSocket, Clients *clients)
         close(fd);
         fclose(clients->fp);
         initOneClient(clients);
+    }
+    return;
+}
+
+void cmd_get_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
+{
+    char Message[BUFF_SIZE] = {};
+    bzero(Message, sizeof(char) * BUFF_SIZE);
+    int fileLen;
+    int sent;
+    if(clients->fp == NULL) fprintf(stderr, "fp error.\n");
+
+    if( (fileLen = fread(Message, sizeof(char), BUFF_SIZE, clients->fp)) > 0 ) {
+        sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+#ifdef DEBUG
+        if(sent != BUFF_SIZE) fprintf(stderr, "sent = %d\n", sent);
+        if(fileLen != BUFF_SIZE) fprintf(stderr, "fileLen = %d\n", fileLen);
+#endif
+        clients->fileRemain = fileLen;
+    }
+    else {
+        fclose(clients->fp);
+        bzero(Message, sizeof(char) * BUFF_SIZE);
+        sprintf(Message, "<end>%04d\n", BUFF_SIZE - clients->fileRemain);
+        send(remoteSocket, Message, BUFF_SIZE, 0);
+        initOneClient(clients);
+        FD_CLR(remoteSocket, writeOriginalSet);
     }
     return;
 }
@@ -333,17 +386,20 @@ int main(int argc, char** argv)
 #endif
                     recvCMD(remoteSocket, &clients[remoteSocket], &readOriginalSet, &writeOriginalSet);
                 }
-                else { // clients[remoteSocket].cmd == CMD_PUT
+                else    // clients[remoteSocket].cmd == CMD_PUT
                     cmd_put_write(remoteSocket, &clients[remoteSocket]);
-                }
             }
         }
 
         // check whether we can write data to socket
         for(int i = 3; i < MAX_FD; ++i) {
-            if(FD_ISSET(i, &writeWorkingSet) && i != localSocket
-                && (clients[i].cmd == CMD_GET || clients[i].cmd == CMD_PLAY)) {
+            if(FD_ISSET(i, &writeWorkingSet) && i != localSocket) {
+                if(clients[i].cmd == CMD_GET) {
+                    cmd_get_read(i, &clients[i], &writeOriginalSet);
+                }
+                /*else if(clients[i].cmd == CMD_PLAY) {
 
+                }*/
             }
         }
         
