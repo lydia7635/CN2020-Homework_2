@@ -5,6 +5,7 @@
 #include <net/if.h>
 #include <unistd.h> 
 #include <string.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -50,6 +51,18 @@ void getIPPort(int argc, char** argv, int *port, char *IP)
 #ifdef DEBUG
     fprintf(stderr, "IP: %s    port: %d\n", IP, *port);
 #endif
+    return;
+}
+void setBlocking(int localSocket)
+{
+    int flags = fcntl(localSocket, F_GETFL, 0);
+    flags &= ~O_NONBLOCK;
+    fcntl(localSocket, F_SETFL, flags);
+    return;
+}
+void setNonBlocking(int localSocket)
+{
+    fcntl(localSocket, F_SETFL, O_NONBLOCK);
     return;
 }
 
@@ -100,17 +113,25 @@ void cmd_list(int localSocket, char Message[BUFF_SIZE])
     char receiveMessage[BUFF_SIZE] = {};
     int end = 0;
     while (!end) {
+        int totalRecved = 0;
         bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
-        if ((recved = recv(localSocket, receiveMessage, sizeof(char) * BUFF_SIZE, 0)) < 0){
-            cout << "recv failed, with received bytes = " << recved << endl;
-            return;
+        while(totalRecved < BUFF_SIZE) {
+            if ((recved = recv(localSocket, &receiveMessage[totalRecved],
+                sizeof(char) * (BUFF_SIZE - totalRecved), 0)) < 0){
+                cout << "recv failed, with received bytes = " << recved << endl;
+                //return;
+                continue;
+            }
+            else if (recved == 0){
+                cout << "recved = 0" << endl;
+                //return;;
+                continue;
+            };
+            totalRecved += recved;
         }
-        else if (recved == 0){
-            //cout << "<end>";
-            return;;
-        };
-        if( strncmp(receiveMessage, "<end>\n", BUFF_SIZE) != 0 )
-            printf("%s", receiveMessage);
+        
+        if( strncmp(receiveMessage, "<end>\n", 5) != 0 )
+            fprintf(stderr, "%s", receiveMessage);
         else
             end = 1;
     }
@@ -138,6 +159,7 @@ void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
         sent = send(localSocket, Message, BUFF_SIZE, 0);
         bzero(Message, sizeof(char) * BUFF_SIZE);
 #ifdef DEBUG
+        if(sent != BUFF_SIZE) fprintf(stderr, "sent = %d\n", sent);
         if(fileLen != BUFF_SIZE) fprintf(stderr, "fileLen = %d\n", fileLen);
 #endif
         fileRemain = fileLen;
@@ -148,6 +170,8 @@ void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
 
     return;
 }
+
+
 
 void cmd_close(int localSocket, char Message[BUFF_SIZE])
 {
@@ -171,6 +195,7 @@ int main(int argc , char *argv[])
     int sent, recved;
     localSocket = socket(AF_INET, SOCK_STREAM, 0);
 
+
     if (localSocket == -1){
         printf("Fail to create a socket.\n");
         return 0;
@@ -191,7 +216,6 @@ int main(int argc , char *argv[])
 
     char inputStr[BUFF_SIZE] = {};
     char Message[BUFF_SIZE] = {};
-
     while(1){
 
         bzero(inputStr, sizeof(char) * BUFF_SIZE);
@@ -204,16 +228,19 @@ int main(int argc , char *argv[])
 
         switch(clients->cmd) {
             case CMD_LS:
+                setBlocking(localSocket);
                 cmd_list(localSocket, Message);
                 break;
 
             case CMD_PUT:
+                setBlocking(localSocket);
                 cmd_put(localSocket, Message, clients->targetFile);
                 //sprintf(Message, "put [%s]\n", clients[remoteSocket].targetFile);
                 //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
 
             case CMD_GET:
+                //cmd_get(localSocket, Message, clients->targetFile);
                 //sprintf(Message, "get [%s]\n", clients[remoteSocket].targetFile);
                 //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
@@ -224,6 +251,7 @@ int main(int argc , char *argv[])
                 break;
 
             case CMD_CLOSE:
+                setBlocking(localSocket);
                 cmd_close(localSocket, Message);
                 break;
 
