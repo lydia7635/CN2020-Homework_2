@@ -134,9 +134,7 @@ void cmd_list(int remoteSocket, Clients *clients)
 
 void cmd_put(int remoteSocket, Clients *clients)
 {
-#ifdef DEBUG
     fprintf(stderr, "We'll receive file '%s'\n", clients->targetFile);
-#endif
 
     clients->cmd = CMD_PUT;
     clients->fp = fopen(clients->targetFile, "w");
@@ -154,9 +152,8 @@ void cmd_get(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
     if(clients->fp == NULL) {
         Message[0] = CMD_FILENOTEXIST;
         send(remoteSocket, Message, BUFF_SIZE, 0);
-#ifdef DEBUG
         fprintf(stderr, "No file '%s' on server.\n", clients->targetFile);
-#endif
+        
         initOneClient(clients);
         return;
     }
@@ -167,17 +164,13 @@ void cmd_get(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
     clients->fileRemain = 0;
     FD_SET(remoteSocket, writeOriginalSet);
  
-#ifdef DEBUG
     fprintf(stderr, "We'll send file '%s'\n", clients->targetFile);
-#endif
     return;
 }
 
 void cmd_close(int remoteSocket, Clients *clients, fd_set *readOriginalSet)
 {
-#ifdef DEBUG
     fprintf(stderr, "Close client socket [%d].\n", remoteSocket);
-#endif
     close(remoteSocket);
     initOneClient(clients);
     FD_CLR(remoteSocket, readOriginalSet);
@@ -276,8 +269,10 @@ void cmd_put_write(int remoteSocket, Clients *clients)
     else {
         int fileSpace;
         sscanf(receiveMessage, "<end>%d", &fileSpace);
+
+        fprintf(stderr, "\"put\" finished!\n");
 #ifdef DEBUG
-        fprintf(stderr, "\"put\" finished! space = %d\n", fileSpace);
+        fprintf(stderr, "fileSpace = %d\n", fileSpace);
 #endif
         fseek(clients->fp, 0L, SEEK_END);
         long int fileSize = ftell(clients->fp);
@@ -317,6 +312,7 @@ void cmd_get_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
         send(remoteSocket, Message, BUFF_SIZE, 0);
         initOneClient(clients);
         FD_CLR(remoteSocket, writeOriginalSet);
+        fprintf(stderr, "\"get\" finished!\n");
     }
     return;
 }
@@ -350,10 +346,8 @@ int main(int argc, char** argv)
 
     setNonBlocking(localSocket);
 
-#ifdef DEBUG
     std::cout <<  "Waiting for connections...\n"
             <<  "Server Port:" << port << std::endl;
-#endif
 
     while(1){
         readWorkingSet = readOriginalSet;
@@ -370,9 +364,7 @@ int main(int argc, char** argv)
             }
             FD_SET(remoteSocket, &readOriginalSet);
 
-#ifdef DEBUG
             fprintf(stderr, "accept: new connection on socket [%d]\n", remoteSocket);
-#endif
             continue;
         }
         // check whether we can read data from other socket
@@ -381,9 +373,7 @@ int main(int argc, char** argv)
             if(FD_ISSET(i, &readWorkingSet) && i != localSocket) { // target fd
                 remoteSocket = i;
                 if(clients[remoteSocket].cmd == CMD_NONE) {
-#ifdef DEBUG
                     fprintf(stderr, "Received some data from socket [%d] ...\n", remoteSocket);
-#endif
                     recvCMD(remoteSocket, &clients[remoteSocket], &readOriginalSet, &writeOriginalSet);
                 }
                 else    // clients[remoteSocket].cmd == CMD_PUT

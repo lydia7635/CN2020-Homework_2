@@ -125,7 +125,7 @@ void cmd_list(int localSocket, char Message[BUFF_SIZE])
             }
             else if (recved == 0){
                 cout << "recved = 0" << endl;
-                //return;;
+                //return;
                 continue;
             };
             totalRecved += recved;
@@ -169,6 +169,8 @@ void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile)
     sprintf(Message, "<end>%04d\n", BUFF_SIZE - fileRemain);
     send(localSocket, Message, BUFF_SIZE, 0);
 
+    fprintf(stderr, "\"put\" finished!\n");
+
     return;
 }
 
@@ -200,9 +202,7 @@ void cmd_get(int localSocket, char Message[BUFF_SIZE], char *targetFile)
     }
 
     // receive data
-#ifdef DEBUG
     fprintf(stderr, "We'll receive file '%s'\n", targetFile);
-#endif
 
     FILE *fp = fopen(targetFile, "w");
 
@@ -240,8 +240,10 @@ void cmd_get(int localSocket, char Message[BUFF_SIZE], char *targetFile)
 
     int fileSpace;
     sscanf(receiveMessage, "<end>%d", &fileSpace);
+
+    fprintf(stderr, "\"get\" finished!\n");
 #ifdef DEBUG
-    fprintf(stderr, "\"get\" finished! space = %d\n", fileSpace);
+    fprintf(stderr, "fileSpace = %d\n", fileSpace);
 #endif
     fseek(fp, 0L, SEEK_END);
     long int fileSize = ftell(fp);
