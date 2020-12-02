@@ -10,12 +10,19 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <sys/stat.h>
 #include "../inc/header_server.h"
 
 using namespace std;
 
 int main(int argc, char** argv)
 {
+    // make folder "server" and enter
+    struct stat folder_info;
+    if(!stat("./server_dir/", &folder_info) == 0 || !(folder_info.st_mode & S_IFDIR))
+        mkdir("./server_dir/", 0777);
+    chdir("./server_dir/");
+
     // preparing socket
     int localSocket, remoteSocket, port = getPort(argc, argv);
     struct sockaddr_in localAddr, remoteAddr;
@@ -87,7 +94,7 @@ int main(int argc, char** argv)
                     cmd_get_read(i, &clients[i], &writeOriginalSet);
                 }
                 /*else if(clients[i].cmd == CMD_PLAY) {
-
+                    cmd_play_read(i, &clients[i], &writeOriginalSet);
                 }*/
             }
         }

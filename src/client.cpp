@@ -8,12 +8,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
 #include "../inc/header_client.h"
 
 using namespace std;
 
 int main(int argc , char *argv[])
 {
+    // make folder "server" and enter
+    struct stat folder_info;
+    if(!stat("./client_dir/", &folder_info) == 0 || !(folder_info.st_mode & S_IFDIR))
+        mkdir("./client_dir/", 0777);
+    chdir("./client_dir/");
+
+    // preparing socket
     int port;
     char IP[MAX_IP_LEN];
     Clients *clients = (Clients *)malloc(sizeof(Clients));
@@ -67,11 +76,10 @@ int main(int argc , char *argv[])
 
             case CMD_GET:
                 cmd_get(localSocket, Message, clients->targetFile);
-                //sprintf(Message, "get [%s]\n", clients[remoteSocket].targetFile);
-                //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;
 
             case CMD_PLAY:
+                cmd_play(localSocket, Message, clients->targetFile);
                 //sprintf(Message, "play [%s]\n", clients[remoteSocket].targetFile);
                 //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
                 break;

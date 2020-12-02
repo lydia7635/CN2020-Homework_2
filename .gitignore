@@ -2,3 +2,5 @@ server
 client
 test_client
 test_server
+server_dir
+client_dir

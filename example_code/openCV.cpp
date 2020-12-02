@@ -19,7 +19,7 @@ int main(int argc, char** argv){
     
     //allocate container to load frames 
     
-    imgServer = Mat::zeros(540,960, CV_8UC3);    
+    imgServer = Mat::zeros(540, 960, CV_8UC3);    
     imgClient = Mat::zeros(540, 960, CV_8UC3);
  
  
@@ -29,7 +29,7 @@ int main(int argc, char** argv){
     }
 
     if(!imgClient.isContinuous()){
-         imgClient = imgClient.clone();
+        imgClient = imgClient.clone();
     }
 
     while(1){
@@ -45,9 +45,9 @@ int main(int argc, char** argv){
         // copy a frame to the buffer
         memcpy(buffer,imgServer.data, imgSize);
         
-        // copy a fream from buffer to the container on client
+        // copy a frame from buffer to the container on client
         uchar *iptr = imgClient.data;
-        memcpy(iptr,buffer,imgSize);
+        memcpy(iptr, buffer, imgSize);
       
         imshow("Video", imgClient);
       //Press ESC on keyboard to exit
@@ -55,8 +55,8 @@ int main(int argc, char** argv){
       // waitKey means a delay to get the next frame.
         char c = (char)waitKey(33.3333);
         if(c==27)
-                break;
-        }
+            break;
+    }
       ////////////////////////////////////////////////////
 	cap.release();
 	destroyAllWindows();

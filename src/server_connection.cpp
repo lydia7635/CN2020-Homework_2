@@ -120,10 +120,11 @@ void recvCMD(int remoteSocket, Clients *clients, fd_set *readOriginalSet, fd_set
             //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
             break;
 
-        /*case CMD_PLAY:
-            sprintf(Message, "play [%s]\n", clients[remoteSocket].targetFile);
-            sent = send(remoteSocket, Message, BUFF_SIZE, 0);
-            break;*/
+        case CMD_PLAY:
+            cmd_play(remoteSocket, clients, writeOriginalSet);
+            //sprintf(Message, "play [%s]\n", clients[remoteSocket].targetFile);
+            //sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+            break;
 
         case CMD_CLOSE:
             cmd_close(remoteSocket, clients, readOriginalSet);

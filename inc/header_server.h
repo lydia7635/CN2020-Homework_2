@@ -34,6 +34,7 @@ void recvCMD(int remoteSocket, Clients *clients, fd_set *readOriginalSet, fd_set
 void cmd_list(int remoteSocket, Clients *clients);
 void cmd_put(int remoteSocket, Clients *clients);
 void cmd_get(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
+void cmd_play(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
 void cmd_close(int remoteSocket, Clients *clients, fd_set *readOriginalSet);
 void cmd_put_write(int remoteSocket, Clients *clients);
 void cmd_get_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);

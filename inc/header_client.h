@@ -28,4 +28,5 @@ void parseCmd(char *string, Clients *clients);
 void cmd_list(int localSocket, char Message[BUFF_SIZE]);
 void cmd_put(int localSocket, char Message[BUFF_SIZE], char *targetFile);
 void cmd_get(int localSocket, char Message[BUFF_SIZE], char *targetFile);
+void cmd_play(int localSocket, char Message[BUFF_SIZE], char *targetFile);
 void cmd_close(int localSocket, char Message[BUFF_SIZE]);
