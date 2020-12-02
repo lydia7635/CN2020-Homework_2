@@ -2,8 +2,8 @@ CC = g++
 OPENCV =  `pkg-config --cflags --libs opencv`
 PTHREAD = -pthread
 
-CLIENT = client.cpp
-SERVER = server.cpp
+CLIENT = src/client.cpp src/client_connection.cpp src/client_data_transfer.cpp
+SERVER = src/server.cpp src/server_connection.cpp src/server_data_transfer.cpp
 CLI = client
 SER = server
 
