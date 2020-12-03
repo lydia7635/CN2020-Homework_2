@@ -1,5 +1,8 @@
+#include "opencv2/opencv.hpp"
+using namespace cv;
+
 #define BUFF_SIZE 1024
-#define MAX_FD 20   // Or use getdtablesize(). We can use 4, 5, ..., 19
+#define MAX_FD 40   // Or use getdtablesize(). We can use 4, 5, ..., 19
 #define MAX_IP_LEN 16
 #define MAX_FILENAME_SIZE 1024
 
@@ -22,6 +25,8 @@ typedef struct {
     char targetFile[MAX_FILENAME_SIZE];
     FILE *fp;
     int fileRemain;
+    Mat imgServer;
+    //VideoCapture cap;
 } Clients;
 
 // void setBlocking(int Socket);
@@ -38,3 +43,4 @@ void cmd_play(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
 void cmd_close(int remoteSocket, Clients *clients, fd_set *readOriginalSet);
 void cmd_put_write(int remoteSocket, Clients *clients);
 void cmd_get_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
+void cmd_play_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);

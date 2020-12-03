@@ -72,7 +72,6 @@ void cmd_get(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
     send(remoteSocket, Message, BUFF_SIZE, 0);
 
     clients->cmd = CMD_GET;
-    clients->fileRemain = 0;
     FD_SET(remoteSocket, writeOriginalSet);
  
     fprintf(stderr, "[%d]: We'll send file '%s'\n", remoteSocket, clients->targetFile);
@@ -103,7 +102,7 @@ void cmd_put_write(int remoteSocket, Clients *clients)
             return;
         }
         else if (recved == 0){
-            fprintf(stderr, "ERROR: \"put\" received nothing.\n");
+            fprintf(stderr, "[%d] ERROR: \"put\" received nothing.\n", remoteSocket);
             fclose(clients->fp);
             initOneClient(clients);
             return;

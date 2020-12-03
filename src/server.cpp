@@ -93,9 +93,9 @@ int main(int argc, char** argv)
                 if(clients[i].cmd == CMD_GET) {
                     cmd_get_read(i, &clients[i], &writeOriginalSet);
                 }
-                /*else if(clients[i].cmd == CMD_PLAY) {
+                else if(clients[i].cmd == CMD_PLAY) {
                     cmd_play_read(i, &clients[i], &writeOriginalSet);
-                }*/
+                }
             }
         }
         

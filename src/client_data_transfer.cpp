@@ -128,13 +128,6 @@ void cmd_get(int localSocket, char Message[BUFF_SIZE], char *targetFile)
                 return;
             }
             recvedTotal += recved;
-
-#ifdef DEBUG
-        //fprintf(stderr, ".");
-        /*if(recved < BUFF_SIZE) {
-            fprintf(stderr, "recved = %d [%c]\n", recved, receiveMessage[0]);
-        }*/
-#endif
         }
 
         if( strncmp(receiveMessage, "<end>", 5) != 0 )

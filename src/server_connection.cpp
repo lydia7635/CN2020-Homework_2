@@ -70,6 +70,7 @@ void initOneClient(Clients *clients)
     clients->cmd = CMD_NONE;
     bzero(clients->targetFile, sizeof(char) * MAX_FILENAME_SIZE);
     clients->fp = NULL;
+    clients->fileRemain = 0;
     return;
 }
 

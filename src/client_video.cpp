@@ -10,9 +10,11 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
+#include "opencv2/opencv.hpp"
 #include "../inc/header_client.h"
 
 using namespace std;
+using namespace cv;
 
 void cmd_play(int localSocket, char Message[BUFF_SIZE], char *targetFile)
 {
@@ -32,7 +34,7 @@ void cmd_play(int localSocket, char Message[BUFF_SIZE], char *targetFile)
         return;
     }
     else if (recved == 0){
-        fprintf(stderr, "ERROR: \"get\" received nothing.\n");
+        fprintf(stderr, "ERROR: \"play\" received nothing.\n");
         return;
     }
 
@@ -53,58 +55,76 @@ void cmd_play(int localSocket, char Message[BUFF_SIZE], char *targetFile)
 
 
     // receive data
-    fprintf(stderr, "We'll receive file '%s'\n", targetFile);
+    char cmd_temp;
+    int width, height;
+    sscanf(receiveMessage, "%c%d%d", &cmd_temp, &width, &height);
+    fprintf(stderr, "We'll play file '%s', %d x %d\n", targetFile, width, height);
 
-    /*FILE *fp = fopen(targetFile, "w");
+    Mat imgClient = Mat::zeros(height, width, CV_8UC3);
+    if(!imgClient.isContinuous()){
+        imgClient = imgClient.clone();
+    }
 
     while(!end) {
-        recvedTotal = 0;
-        bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
-
-        while(recvedTotal < BUFF_SIZE) {
+    	// receive imgSize
+    	recvedTotal = 0;
+    	bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+    	while(recvedTotal < BUFF_SIZE) {
             if ((recved = recv(localSocket, &receiveMessage[recvedTotal],
                 sizeof(char) * (BUFF_SIZE - recvedTotal), 0)) < 0){
                 cout << "recv failed, with received bytes = " << recved << endl;
-                fclose(fp);
                 return;
             }
             else if (recved == 0){
-                fprintf(stderr, "ERROR: \"get\" received nothing.\n");
-                fclose(fp);
+                fprintf(stderr, "ERROR: \"play\" received nothing.\n");
                 return;
             }
             recvedTotal += recved;
-
-#ifdef DEBUG*/
-        //fprintf(stderr, ".");
-        /*if(recved < BUFF_SIZE) {
-            fprintf(stderr, "recved = %d [%c]\n", recved, receiveMessage[0]);
-        }*/
-/*#endif
         }
 
-        if( strncmp(receiveMessage, "<end>", 5) != 0 )
-            fwrite(receiveMessage, sizeof(char), BUFF_SIZE, fp);
-        else
-            end = 1;
+        if(strncmp(receiveMessage, "<end>", 5) == 0) {
+        	end = 1;
+        	continue;
+        }
+
+        int imgSize;
+        sscanf(receiveMessage, "%d", &imgSize);
+        uchar buffer[imgSize];
+
+        // receive frame
+        uchar *iptr = imgClient.data;
+
+        int recvImgTotal = 0;
+        while(recvImgTotal < imgSize) {
+	    	int cur_recv_len = (recvImgTotal + BUFF_SIZE > imgSize)? imgSize - recvImgTotal : BUFF_SIZE;
+
+	    	recvedTotal = 0;
+	    	bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+	    	while(recvedTotal < BUFF_SIZE) {	// receive until BUFF_SIZE
+	    	    if ((recved = recv(localSocket, &receiveMessage[recvedTotal],
+	    	        sizeof(char) * (BUFF_SIZE - recvedTotal), 0)) < 0){
+	    	        cout << "recv failed, with received bytes = " << recved << endl;
+	    	        return;
+	    	    }
+	    	    else if (recved == 0){
+	    	        fprintf(stderr, "ERROR: \"play\" received nothing.\n");
+	    	        return;
+	    	    }
+	    	    recvedTotal += recved;
+	    	}
+	    	memcpy(&buffer[recvImgTotal], receiveMessage, cur_recv_len);
+        	recvImgTotal += cur_recv_len;
+        }
+        memcpy(iptr, buffer, imgSize);
+        imshow("Video", imgClient);
+
+        char c = (char)waitKey(33.3333);// we have not deal with this!
+        if(c==27)
+            break;
     }
 
-    int fileSpace;
-    sscanf(receiveMessage, "<end>%d", &fileSpace);
+    fprintf(stderr, "\"play\" finished!\n");
+    destroyAllWindows();
 
-    fprintf(stderr, "\"get\" finished!\n");
-#ifdef DEBUG
-    fprintf(stderr, "fileSpace = %d\n", fileSpace);
-#endif
-    fseek(fp, 0L, SEEK_END);
-    long int fileSize = ftell(fp);
-#ifdef DEBUG
-    fprintf(stderr, "fileSize = %ld\n", fileSize);
-#endif
-    int fd = fileno(fp);
-    ftruncate(fd, fileSize - fileSpace);
-
-    close(fd);
-    fclose(fp);*/
     return;
 }

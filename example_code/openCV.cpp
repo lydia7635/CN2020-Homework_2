@@ -9,7 +9,7 @@ int main(int argc, char** argv){
   
     // server
 
-    Mat imgServer,imgClient;
+    Mat imgServer, imgClient;
     VideoCapture cap("./tmp.mpg");
     
     // get the resolution of the video
@@ -45,6 +45,8 @@ int main(int argc, char** argv){
         // copy a frame to the buffer
         memcpy(buffer,imgServer.data, imgSize);
         
+        //---------------------------------------------
+
         // copy a frame from buffer to the container on client
         uchar *iptr = imgClient.data;
         memcpy(iptr, buffer, imgSize);
