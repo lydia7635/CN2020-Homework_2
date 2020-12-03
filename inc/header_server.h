@@ -27,6 +27,9 @@ typedef struct {
     int fileRemain;
     Mat imgServer;
     //VideoCapture cap;
+    int sentImgTotal;
+    int imgSize;
+    uchar *buffer;
 } Clients;
 
 // void setBlocking(int Socket);
@@ -44,3 +47,5 @@ void cmd_close(int remoteSocket, Clients *clients, fd_set *readOriginalSet);
 void cmd_put_write(int remoteSocket, Clients *clients);
 void cmd_get_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
 void cmd_play_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
+void cmd_play_recv(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);
+void cmd_play_close(int remoteSocket, Clients *clients, fd_set *writeOriginalSet);

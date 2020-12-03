@@ -47,10 +47,8 @@ void cmd_play(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
     FD_SET(remoteSocket, writeOriginalSet);
     clients->cmd = CMD_PLAY;
 
-    fprintf(stderr, "before open\n");
     if(clients_cap[remoteSocket].open(clients->targetFile) == 0)
     	fprintf(stderr, "Open mpg file error.\n");
-	fprintf(stderr, "after open\n");
     
     // get the resolution of the video
     int width = clients_cap[remoteSocket].get(CV_CAP_PROP_FRAME_WIDTH);
@@ -75,45 +73,79 @@ void cmd_play_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
 	char Message[BUFF_SIZE] = {};
     int sent;
 
-	//get a frame from the video to the container on server.
-	clients_cap[remoteSocket] >> clients->imgServer;
+    if(clients->sentImgTotal == -1) {
+		//get a frame from the video to the container on server.
+		clients_cap[remoteSocket] >> clients->imgServer;
 
-	// check the video is end or not
-	if(clients->imgServer.empty()) {
-        bzero(Message, sizeof(char) * BUFF_SIZE);
-        sprintf(Message, "<end>\n");
-        send(remoteSocket, Message, BUFF_SIZE, 0);
-        initOneClient(clients);
-        FD_CLR(remoteSocket, writeOriginalSet);
-        clients_cap[remoteSocket].release();
-        fprintf(stderr, "[%d]: \"play\" finished!\n", remoteSocket);
-        return;
-	}
-        
-    // get the size of a frame in bytes and send it to clients
-    int imgSize = clients->imgServer.total() * clients->imgServer.elemSize();
-    bzero(Message, sizeof(char) * BUFF_SIZE);
-    sprintf(Message, "%d\n", imgSize);
-    sent = send(remoteSocket, Message, BUFF_SIZE, 0);
-    
-    // allocate a buffer to load the frame (there would be 2 buffers in the world of the Internet)
-    uchar buffer[imgSize];
-    
-    // copy a frame to the buffer
-    memcpy(buffer, clients->imgServer.data, imgSize);
-
-    // send a complete frame
-    int sendImgTotal = 0;
-    while(sendImgTotal < imgSize) {
+		// check the video is end or not
+		if(clients->imgServer.empty()) {
+	        bzero(Message, sizeof(char) * BUFF_SIZE);
+	        sprintf(Message, "<end>\n");
+	        send(remoteSocket, Message, BUFF_SIZE, 0);
+	        cmd_play_close(remoteSocket, clients, writeOriginalSet);
+	        return;
+		}
+		// get the size of a frame in bytes and send it to clients
+		clients->imgSize = clients->imgServer.total() * clients->imgServer.elemSize();
+		bzero(Message, sizeof(char) * BUFF_SIZE);
+		sprintf(Message, "%d\n", clients->imgSize);
+		sent = send(remoteSocket, Message, BUFF_SIZE, 0);
+		
+		// allocate a buffer to load the frame (there would be 2 buffers in the world of the Internet)
+		clients->buffer = (uchar *)malloc(sizeof(uchar) * clients->imgSize);
+		
+		// copy a frame to the buffer
+		memcpy(clients->buffer, clients->imgServer.data, clients->imgSize);
+		clients->sentImgTotal = 0;
+    }
+    else if(clients->sentImgTotal < clients->imgSize) {
+    	// send part of frame
     	bzero(Message, sizeof(char) * BUFF_SIZE);
-    	int cur_send_len = (sendImgTotal + BUFF_SIZE > imgSize)? imgSize - sendImgTotal : BUFF_SIZE;
-    	memcpy(Message, &buffer[sendImgTotal], cur_send_len);
+    	int cur_send_len = (clients->sentImgTotal + BUFF_SIZE > clients->imgSize)? clients->imgSize - clients->sentImgTotal : BUFF_SIZE;
+    	memcpy(Message, &(clients->buffer[clients->sentImgTotal]), cur_send_len);
     	sent = send(remoteSocket, Message, BUFF_SIZE, 0);
 #ifdef DEBUG
         if(sent != BUFF_SIZE) fprintf(stderr, "sent = %d\n", sent);
 #endif
-        sendImgTotal += cur_send_len;
+        clients->sentImgTotal += cur_send_len;	
     }
-
+    else {
+    	// one frame has been completely sent
+    	free(clients->buffer);
+    	clients->sentImgTotal = -1;
+    }
     return;
+}
+
+void cmd_play_recv(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
+{
+	char receiveMessage[BUFF_SIZE];
+	int recvedTotal = 0, recved;
+	bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+	while(recvedTotal < BUFF_SIZE) {	// receive until BUFF_SIZE
+	    if ((recved = recv(remoteSocket, &receiveMessage[recvedTotal],
+	        sizeof(char) * (BUFF_SIZE - recvedTotal), 0)) < 0){
+	        cout << "recv failed, with received bytes = " << recved << endl;
+	        return;
+	    }
+	    else if (recved == 0){
+	        fprintf(stderr, "ERROR: \"play\" received nothing.\n");
+	        return;
+	    }
+	    recvedTotal += recved;
+	}
+	if(strncmp(receiveMessage, "<end>", 5) == 0) {
+		free(clients->buffer);
+		cmd_play_close(remoteSocket, clients, writeOriginalSet);
+	}
+	return;
+}
+
+void cmd_play_close(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
+{
+	initOneClient(clients);
+	FD_CLR(remoteSocket, writeOriginalSet);
+	clients_cap[remoteSocket].release();
+	fprintf(stderr, "[%d]: \"play\" finished!\n", remoteSocket);
+	return;
 }

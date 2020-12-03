@@ -82,6 +82,9 @@ int main(int argc, char** argv)
 #endif
                     recvCMD(remoteSocket, &clients[remoteSocket], &readOriginalSet, &writeOriginalSet);
                 }
+                else if(clients[remoteSocket].cmd == CMD_PLAY) {
+                    cmd_play_recv(remoteSocket, &clients[remoteSocket], &writeOriginalSet);
+                }
                 else    // clients[remoteSocket].cmd == CMD_PUT
                     cmd_put_write(remoteSocket, &clients[remoteSocket]);
             }

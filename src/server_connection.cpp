@@ -71,6 +71,8 @@ void initOneClient(Clients *clients)
     bzero(clients->targetFile, sizeof(char) * MAX_FILENAME_SIZE);
     clients->fp = NULL;
     clients->fileRemain = 0;
+    clients->sentImgTotal = -1;
+    clients->buffer = NULL;
     return;
 }
 

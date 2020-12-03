@@ -118,9 +118,17 @@ void cmd_play(int localSocket, char Message[BUFF_SIZE], char *targetFile)
         memcpy(iptr, buffer, imgSize);
         imshow("Video", imgClient);
 
-        char c = (char)waitKey(33.3333);// we have not deal with this!
-        if(c==27)
-            break;
+        char c = (char)waitKey(33.3333);
+        if(c == 27) {	// Press ESC to exit
+            end = 1;
+            bzero(Message, sizeof(char) * BUFF_SIZE);
+            sprintf(Message, "<end>\n");
+           	sent = send(localSocket, Message, BUFF_SIZE, 0);
+           	do {
+           		bzero(receiveMessage, sizeof(char) * BUFF_SIZE);
+           		recved = recv(localSocket, receiveMessage, BUFF_SIZE, MSG_DONTWAIT);
+           	} while(recved > 0);
+        }
     }
 
     fprintf(stderr, "\"play\" finished!\n");
