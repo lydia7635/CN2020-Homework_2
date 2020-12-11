@@ -5,6 +5,7 @@ using namespace cv;
 #define MAX_FD 40   // Or use getdtablesize(). We can use 4, 5, ..., 19
 #define MAX_IP_LEN 16
 #define MAX_FILENAME_SIZE 1024
+#define MAX_BUF_LINK 3
 
 typedef enum Cmd
 {
@@ -20,6 +21,12 @@ typedef enum Cmd
     CMD_NOTMPG
 } CMD;
 
+typedef struct BufLink{
+    uchar *buffer;
+    int imgSize;
+    struct BufLink *next;
+} BUFLINK;
+
 typedef struct {
     CMD cmd;    // command
     char targetFile[MAX_FILENAME_SIZE];
@@ -28,8 +35,10 @@ typedef struct {
     Mat imgServer;
     //VideoCapture cap;
     int sentImgTotal;
-    int imgSize;
-    uchar *buffer;
+    BUFLINK *bufLinkHead;
+    BUFLINK *bufLinkTail;
+    int bufLinkNum;
+    int bufLinkStop;
 } Clients;
 
 // void setBlocking(int Socket);

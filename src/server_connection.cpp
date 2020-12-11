@@ -72,7 +72,10 @@ void initOneClient(Clients *clients)
     clients->fp = NULL;
     clients->fileRemain = 0;
     clients->sentImgTotal = -1;
-    clients->buffer = NULL;
+    clients->bufLinkHead = NULL;
+    clients->bufLinkTail = NULL;
+    clients->bufLinkNum = 0;
+    clients->bufLinkStop = 0;
     return;
 }
 

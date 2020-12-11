@@ -17,6 +17,32 @@ using namespace cv;
 
 VideoCapture clients_cap[MAX_FD];
 
+void freeOneLinkNode(Clients *clients)
+{
+ 	--(clients->bufLinkNum);
+
+	BufLink *tmp = clients->bufLinkHead;
+ 	free(tmp->buffer);
+
+ 	if(clients->bufLinkNum == 0) {
+ 		clients->bufLinkHead = NULL;
+ 		clients->bufLinkTail = NULL;
+ 	}
+ 	else {
+ 		clients->bufLinkHead = clients->bufLinkHead->next;
+ 	}
+ 	free(tmp);
+ 	return;
+}
+
+void freeAllLinkNode(Clients *clients)
+{
+	while(clients->bufLinkNum > 0) {
+		freeOneLinkNode(clients);
+	}
+	return;
+}
+
 void cmd_play(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
 {
 	char Message[BUFF_SIZE] = {};
@@ -73,36 +99,59 @@ void cmd_play_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
 	char Message[BUFF_SIZE] = {};
     int sent;
 
-    if(clients->sentImgTotal == -1) {
-		//get a frame from the video to the container on server.
+    if(!(clients->bufLinkStop) && clients->bufLinkNum < MAX_BUF_LINK) {
+    	//get a frame from the video to the container on server.
 		clients_cap[remoteSocket] >> clients->imgServer;
 
 		// check the video is end or not
 		if(clients->imgServer.empty()) {
+			clients->bufLinkStop = 1;
+		}
+		else {
+			BufLink *tmpLinkNode = (BufLink *)malloc(sizeof(BufLink));
+			tmpLinkNode->imgSize = clients->imgServer.total() * clients->imgServer.elemSize();
+			tmpLinkNode->next = NULL;
+
+			// allocate a buffer to load the frame (there would be 2 buffers in the world of the Internet)
+			tmpLinkNode->buffer = (uchar *)malloc(sizeof(uchar) * tmpLinkNode->imgSize);
+			
+			// copy a frame to the buffer
+			memcpy(tmpLinkNode->buffer, clients->imgServer.data, tmpLinkNode->imgSize);
+
+			if(clients->bufLinkNum == 0) {
+				clients->bufLinkHead = tmpLinkNode;
+			}
+			else{
+				clients->bufLinkTail->next = tmpLinkNode;
+			}
+			clients->bufLinkTail = tmpLinkNode;
+
+    		++(clients->bufLinkNum);
+		}
+    }
+
+    if(clients->sentImgTotal == -1) {
+		if(clients->bufLinkNum == 0) {	// we have sent all the frames
 	        bzero(Message, sizeof(char) * BUFF_SIZE);
 	        sprintf(Message, "<end>\n");
 	        send(remoteSocket, Message, BUFF_SIZE, 0);
 	        cmd_play_close(remoteSocket, clients, writeOriginalSet);
 	        return;
 		}
+
 		// get the size of a frame in bytes and send it to clients
-		clients->imgSize = clients->imgServer.total() * clients->imgServer.elemSize();
 		bzero(Message, sizeof(char) * BUFF_SIZE);
-		sprintf(Message, "%d\n", clients->imgSize);
+		sprintf(Message, "%d\n", clients->bufLinkHead->imgSize);
 		sent = send(remoteSocket, Message, BUFF_SIZE, 0);
 		
-		// allocate a buffer to load the frame (there would be 2 buffers in the world of the Internet)
-		clients->buffer = (uchar *)malloc(sizeof(uchar) * clients->imgSize);
-		
-		// copy a frame to the buffer
-		memcpy(clients->buffer, clients->imgServer.data, clients->imgSize);
 		clients->sentImgTotal = 0;
     }
-    else if(clients->sentImgTotal < clients->imgSize) {
+    else if(clients->sentImgTotal < clients->bufLinkHead->imgSize) {
     	// send part of frame
     	bzero(Message, sizeof(char) * BUFF_SIZE);
-    	int cur_send_len = (clients->sentImgTotal + BUFF_SIZE > clients->imgSize)? clients->imgSize - clients->sentImgTotal : BUFF_SIZE;
-    	memcpy(Message, &(clients->buffer[clients->sentImgTotal]), cur_send_len);
+    	int cur_send_len = (clients->sentImgTotal + BUFF_SIZE > clients->bufLinkHead->imgSize)?
+    			clients->bufLinkHead->imgSize - clients->sentImgTotal : BUFF_SIZE;
+    	memcpy(Message, &(clients->bufLinkHead->buffer[clients->sentImgTotal]), cur_send_len);
     	sent = send(remoteSocket, Message, BUFF_SIZE, 0);
 #ifdef DEBUG
         if(sent != BUFF_SIZE) fprintf(stderr, "sent = %d\n", sent);
@@ -111,7 +160,7 @@ void cmd_play_read(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
     }
     else {
     	// one frame has been completely sent
-    	free(clients->buffer);
+    	freeOneLinkNode(clients);
     	clients->sentImgTotal = -1;
     }
     return;
@@ -135,7 +184,7 @@ void cmd_play_recv(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
 	    recvedTotal += recved;
 	}
 	if(strncmp(receiveMessage, "<end>", 5) == 0) {
-		free(clients->buffer);
+		freeAllLinkNode(clients);
 		cmd_play_close(remoteSocket, clients, writeOriginalSet);
 	}
 	return;
