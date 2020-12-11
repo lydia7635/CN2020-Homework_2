@@ -184,6 +184,10 @@ void cmd_play_recv(int remoteSocket, Clients *clients, fd_set *writeOriginalSet)
 	    recvedTotal += recved;
 	}
 	if(strncmp(receiveMessage, "<end>", 5) == 0) {
+		char Message[BUFF_SIZE];
+		bzero(Message, sizeof(char) * BUFF_SIZE);
+        sprintf(Message, "<end>\n");
+	    send(remoteSocket, Message, BUFF_SIZE, 0);
 		freeAllLinkNode(clients);
 		cmd_play_close(remoteSocket, clients, writeOriginalSet);
 	}

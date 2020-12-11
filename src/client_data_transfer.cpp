@@ -25,8 +25,8 @@ void cmd_list(int localSocket, char Message[BUFF_SIZE])
             if ((recved = recv(localSocket, &receiveMessage[totalRecved],
                 sizeof(char) * (BUFF_SIZE - totalRecved), 0)) < 0){
                 cout << "recv failed, with received bytes = " << recved << endl;
-                //return;
-                continue;
+                return;
+                //continue;
             }
             else if (recved == 0){
                 cout << "recved = 0" << endl;

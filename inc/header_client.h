@@ -1,7 +1,9 @@
+#include "opencv2/opencv.hpp"
 #define BUFF_SIZE 1024
 #define MAX_FD 20   // Or use getdtablesize(). We can use 4, 5, ..., 19
 #define MAX_IP_LEN 16
 #define MAX_FILENAME_SIZE 1024
+#define MAX_BUF_LINK 5
 
 typedef enum Cmd
 {
@@ -21,6 +23,19 @@ typedef struct {
     CMD cmd;    // command
     char targetFile[MAX_FILENAME_SIZE];
 } Clients;
+
+typedef struct LinkNode {
+    int imgSize;
+    uchar *buffer;
+    struct LinkNode *next;
+} LINKNODE;
+
+typedef struct BufLink {
+    LINKNODE *linkNodeHead;
+    LINKNODE *linkNodeTail;
+    int nodeNum;    // for main
+    int stopRecv;
+} BUFLINK;
 
 void initClients(Clients *clients);
 void getIPPort(int argc, char** argv, int *port, char *IP);
